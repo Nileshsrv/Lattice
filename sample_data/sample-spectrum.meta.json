@@ -1,0 +1,47 @@
+{
+  "name": "sample-spectrum",
+  "kind": "synthetic",
+  "description": "Synthetic stellar-like spectrum: Planck continuum at T_eff = 5772 K with gaussian absorption features at H/Ca II/Na I wavelengths and seeded gaussian noise. Not an observation.",
+  "provenance_label": "simulated",
+  "license": "CC0-1.0",
+  "generator": "server/scripts/generate_sample_spectrum.py",
+  "seed": 42,
+  "true_parameters": {
+    "T_eff_K": 5772.0,
+    "noise_sigma_rel": 0.01,
+    "lines": [
+      [
+        393.37,
+        0.35,
+        0.6
+      ],
+      [
+        396.85,
+        0.3,
+        0.6
+      ],
+      [
+        486.13,
+        0.25,
+        0.5
+      ],
+      [
+        589.3,
+        0.15,
+        0.4
+      ],
+      [
+        656.28,
+        0.3,
+        0.5
+      ]
+    ]
+  },
+  "columns": {
+    "wavelength_nm": "nm",
+    "flux": "arbitrary (relative), calibration unknown"
+  },
+  "known_unknowns": [
+    "absolute flux calibration"
+  ]
+}

@@ -1,0 +1,29 @@
+from fastapi import FastAPI
+
+from . import config
+from .db import Base, engine
+from .routes import auth, datasets, notebooks, projects, reports, runs, tools
+
+
+def create_app() -> FastAPI:
+    config.ensure_dirs()
+    # Schema management: create_all is used at app start for the slice; Alembic
+    # owns migrations from the first schema change onward (see migrations/).
+    Base.metadata.create_all(engine)
+    app = FastAPI(title="Lattice", version="0.1.0")
+    app.include_router(auth.router)
+    app.include_router(projects.router)
+    app.include_router(datasets.router)
+    app.include_router(tools.router)
+    app.include_router(runs.router)
+    app.include_router(notebooks.router)
+    app.include_router(reports.router)
+
+    @app.get("/api/health")
+    def health():
+        return {"ok": True, "version": "0.1.0"}
+
+    return app
+
+
+app = create_app()

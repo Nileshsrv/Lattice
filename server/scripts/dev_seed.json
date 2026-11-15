@@ -1,0 +1,5 @@
+{
+  "comment": "Local development/test account for the vertical slice. Localhost only; not a real credential.",
+  "username": "demo_researcher",
+  "password": "lattice-dev-7391"
+}

@@ -1,7 +1,23 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import { AssistantPanel } from "../AssistantPanel";
+import { initials } from "../icons";
 import { usePresence } from "../presence";
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  "project.created": "Project created",
+  "member.added": "Member added",
+  "dataset.ingested": "Dataset imported",
+  "run.completed": "Run completed",
+  "notebook.created": "Notebook created",
+  "report.created": "Report created",
+  "report.exported": "Report exported",
+  review_state_changed: "Review state changed",
+};
+
+function activityLabel(kind: string): string {
+  return ACTIVITY_LABELS[kind] ?? kind.replace(/[._]/g, " ");
+}
 
 export function ProjectPage(props: { id: string }) {
   const presentUsers = usePresence(props.id);
@@ -40,30 +56,83 @@ export function ProjectPage(props: { id: string }) {
 
   return (
     <>
-      <div className="card">
-        <h2>{project.name}</h2>
+      <div className="card hero" id="sec-overview">
+        <span className="eyebrow">Project</span>
+        <h1>{project.name}</h1>
         {project.research_question && (
-          <p className="muted">Research question: {project.research_question}</p>
+          <p className="question">{project.research_question}</p>
         )}
-        <p>
-          {project.members.map((m: any) => (
-            <span
-              className={`chip ${presentUsers.includes(m.username) ? "ok" : ""}`}
-              key={m.username}
-              title={presentUsers.includes(m.username) ? "online now" : "offline"}
-            >
-              {presentUsers.includes(m.username) ? "● " : ""}
-              {m.username} · {m.role}
-            </span>
-          ))}
-        </p>
-        <InviteForm projectId={props.id} myRole={project.my_role} onDone={load} />
+        <div className="members">
+          {project.members.map((m: any) => {
+            const online = presentUsers.includes(m.username);
+            return (
+              <span className="member" key={m.username} title={online ? "online now" : "offline"}>
+                <span className={`avatar ${online ? "online" : ""}`}>{initials(m.username)}</span>
+                {m.username}
+                <span className="role">
+                  {m.role}
+                  {online ? " · online" : ""}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+        {project.my_role === "owner" && (
+          <details className="fold">
+            <summary>+ Invite a collaborator</summary>
+            <InviteForm projectId={props.id} myRole={project.my_role} onDone={load} />
+          </details>
+        )}
+      </div>
+
+      <div className="stat-grid">
+        <div className="stat">
+          <div className="label">Datasets</div>
+          <div className="value num">{datasets.length}</div>
+          <div className="hint">immutable, hashed</div>
+        </div>
+        <div className="stat">
+          <div className="label">Runs</div>
+          <div className="value num">{runs.length}</div>
+          <div className="hint">
+            {runs.filter((r: any) => r.status === "completed").length} completed
+          </div>
+        </div>
+        <div className="stat">
+          <div className="label">Notebooks</div>
+          <div className="value num">{notebooks.length}</div>
+          <div className="hint">results bound by reference</div>
+        </div>
+        <div className="stat">
+          <div className="label">Tools</div>
+          <div className="value num">{tools.length}</div>
+          <div className="hint">validated methods</div>
+        </div>
       </div>
 
       <AssistantPanel projectId={props.id} />
 
+      <div className="card" id="sec-workbench">
+        <div className="card-head">
+          <h2>
+            Workbench <span className="count">{tools.length}</span>
+          </h2>
+        </div>
+        <div className="tool-grid">
+          {tools.map((t) => (
+            <a className="tool-card" key={t.id} href={`#/p/${props.id}/tool/${t.id}`}>
+              <div className="domain">{t.domain}</div>
+              <div className="name">{t.name}</div>
+              <div className="model">{t.model.name}</div>
+              <span className="chip accent">{t.maturity}</span>
+              <span className="chip">{t.category}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
       <div className="row">
-        <div className="card">
+        <div className="card" id="sec-datasets">
           <h2>Datasets</h2>
           <UploadForm projectId={props.id} onDone={load} />
           {datasets.length === 0 ? (
@@ -84,25 +153,7 @@ export function ProjectPage(props: { id: string }) {
           )}
         </div>
 
-        <div className="card">
-          <h2>Workbench</h2>
-          <ul className="plain">
-            {tools.map((t) => (
-              <li key={t.id}>
-                <a href={`#/p/${props.id}/tool/${t.id}`}>{t.name}</a>{" "}
-                <span className="chip accent">{t.maturity}</span>
-                <span className="chip">{t.category}</span>
-                <div className="muted" style={{ fontSize: 12.5 }}>
-                  {t.model.name}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <div className="row">
-        <div className="card">
+        <div className="card" id="sec-runs">
           <h2>Runs</h2>
           {runs.length >= 2 && (
             <div className="field-unit">
@@ -141,7 +192,10 @@ export function ProjectPage(props: { id: string }) {
           )}
         </div>
 
-        <div className="card">
+      </div>
+
+      <div className="row">
+        <div className="card" id="sec-notebooks">
           <h2>Notebooks &amp; reports</h2>
           <NotebookForm projectId={props.id} onDone={load} />
           <ul className="plain">
@@ -154,17 +208,18 @@ export function ProjectPage(props: { id: string }) {
           </ul>
           <ReportList projectId={props.id} notebooks={notebooks} />
         </div>
-      </div>
 
-      <div className="card">
-        <h2>Activity</h2>
-        <ul className="plain">
-          {project.recent_activity.map((a: any, i: number) => (
-            <li key={i}>
-              <span className="mono muted">{a.at.slice(0, 19)}</span> {a.kind}
-            </li>
-          ))}
-        </ul>
+        <div className="card" id="sec-activity">
+          <h2>Activity</h2>
+          <ul className="timeline">
+            {project.recent_activity.map((a: any, i: number) => (
+              <li key={i}>
+                {activityLabel(a.kind)}
+                <span className="when">{a.at.slice(0, 16).replace("T", " ")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </>
   );

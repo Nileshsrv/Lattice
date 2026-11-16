@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, ApiError } from "./api";
+import { IconSpark } from "./icons";
 
 interface Exchange {
   question: string;
@@ -38,37 +39,42 @@ export function AssistantPanel(props: { projectId: string }) {
 
   if (!open) {
     return (
-      <div className="card">
-        <button className="secondary" onClick={() => setOpen(true)}>
-          Open AI research assistant
-        </button>
-        <span className="muted" style={{ marginLeft: 10, fontSize: 12.5 }}>
-          Suggests tools; every execution needs your approval. It computes nothing itself.
-        </span>
+      <div className="card assistant">
+        <div className="assistant-bar">
+          <span className="spark"><IconSpark /></span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <b>AI research assistant</b>
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              Suggests tools; every execution needs your approval. It computes nothing itself.
+            </div>
+          </div>
+          <button className="secondary" onClick={() => setOpen(true)}>
+            Open AI research assistant
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <h2>
-        AI research assistant <span className="chip">ai-suggested</span>
-        <button className="secondary" style={{ float: "right" }} onClick={() => setOpen(false)}>
+    <div className="card assistant">
+      <div className="card-head">
+        <h2>
+          <span className="spark"><IconSpark /></span>
+          AI research assistant <span className="chip">ai-suggested</span>
+        </h2>
+        <button className="secondary" onClick={() => setOpen(false)}>
           Close
         </button>
-      </h2>
+      </div>
       <p className="muted" style={{ fontSize: 12.5 }}>
         Rule-based tool dispatcher (no external LLM in this build). It never computes or
         asserts physics values; numbers only come from tool runs you approve.
       </p>
       {exchanges.map((exchange, i) => (
         <div key={i} style={{ marginBottom: 14 }}>
-          <p>
-            <span className="chip">you</span> {exchange.question}
-          </p>
-          <p>
-            <span className="chip accent">assistant</span> {exchange.text}
-          </p>
+          <div className="bubble you">{exchange.question}</div>
+          <div className="bubble">{exchange.text.replace(/\*\*|`/g, "")}</div>
           {exchange.tool_plan && (
             <ToolPlanCard projectId={props.projectId} plan={exchange.tool_plan} />
           )}
@@ -125,7 +131,7 @@ function ToolPlanCard(props: { projectId: string; plan: any }) {
   };
 
   return (
-    <div style={{ border: "1px solid var(--glass-border)", borderRadius: 6, padding: "10px 14px" }}>
+    <div className="plan">
       <p>
         Tool plan: <b>{plan.tool_label}</b> <code>{plan.tool_name}</code>{" "}
         <span className="chip accent">{plan.maturity}</span>

@@ -115,21 +115,24 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
 
   return (
     <>
-      <div className="card">
+      <div className="card hero">
         {parentRunId && (
-          <div style={{ padding: "8px 12px", marginBottom: 12, borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>
-            <strong>Creating Variant:</strong> Branching from parent run{" "}
-            <a href={`#/runs/${parentRunId}`}>{parentRun?.name || parentRunId}</a>
+          <div className="callout info" style={{ marginTop: 0 }}>
+            <span>
+              <strong>Creating a variant.</strong> Branching from parent run{" "}
+              <a href={`#/run/${parentRunId}`}>{parentRun?.name || parentRunId}</a>; the
+              parent stays unchanged.
+            </span>
           </div>
         )}
-        <h2>
-          {contract.name}{" "}
-          <span className="chip accent">{contract.maturity}</span>
-          <span className="chip">{contract.category}</span>
-          <span className="chip">{contract.domain}</span>
-        </h2>
-        <p className="muted">{contract.model.name} · v{contract.version}</p>
-        <a href={`#/p/${props.projectId}`}>← back to project</a>
+        <span className="eyebrow">{contract.domain} · workbench tool</span>
+        <h1>{contract.name}</h1>
+        <p className="question">
+          {contract.model.name} · v{contract.version}
+        </p>
+        <span className="chip accent">{contract.maturity}</span>
+        <span className="chip">{contract.category}</span>
+        <a href={`#/p/${props.projectId}`} style={{ marginLeft: 6 }}>← back to project</a>
       </div>
 
       <div className="row">

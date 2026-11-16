@@ -32,9 +32,13 @@ WRITER_ROLES = ("owner", "editor", "collaborator")
 _KEYWORD_TOOL_MAP = [
     # (keywords_any_of, tool_id, description)
     (["compton", "scatter"], "compton.scattering", "Compton Scattering Lab"),
-    (["tunnel", "tunneling", "quantum tunnel"], "quantum.rectangular_tunneling", "Quantum Tunneling"),
-    (["blackbody", "wien", "stellar", "star", "spectrum", "spectral"], "stellar.wien", "Wien Displacement Law"),
-    (["fit", "regression", "analysis", "gaussian", "propagat"], "analysis.linear_regression", "Scientific Analysis — Linear Regression"),
+    (["tunnel", "barrier"], "quantum.rectangular_tunneling", "Quantum Tunnelling Lab"),
+    (["sweep"], "quantum.rectangular_tunneling_sweep", "Quantum Tunnelling Energy Sweep"),
+    (["wien", "peak wavelength", "displacement"], "stellar.wien_temperature", "Wien's Displacement Law Calculator"),
+    (["blackbody", "stellar", "star", "spectrum", "spectral", "temperature"], "stellar.blackbody_fit", "Blackbody Continuum Fit"),
+    (["gaussian", "peak fit"], "analysis.gaussian_peak_fit", "Gaussian Peak Fit"),
+    (["propagat", "uncertainty"], "analysis.independent_error_propagation", "Error Propagation"),
+    (["fit", "regression", "analysis", "slope"], "analysis.linear_regression", "Linear Regression"),
 ]
 
 
@@ -126,11 +130,27 @@ def assistant_query(
     if tool_match:
         tool_id, tool_description = tool_match
 
-    # c. Build tool_plan
+    # c. Build tool_plan. Tools that take a dataset are linked, not executed,
+    # because assistant execution binds no data (the tool page does that flow).
     tool_plan = None
     if tool_id:
+        contract, _fn = registry.get(tool_id)
         tool_plan = {
             "tool_name": tool_id,
+            "tool_label": contract.name,
+            "maturity": contract.maturity,
+            "inputs": [
+                {
+                    "name": s.name,
+                    "label": s.label,
+                    "canonical_unit": s.canonical_unit,
+                    "default": s.default,
+                    "required": s.required,
+                }
+                for s in contract.inputs
+            ],
+            "needs_dataset": bool(contract.dataset_inputs),
+            "guards": contract.guards,
             "suggested_params": {},
             "requires_user_approval": True,
         }
@@ -194,6 +214,12 @@ def assistant_execute(
         contract, _fn = registry.get(tool_name)
     except KeyError:
         raise HTTPException(404, f"unknown tool: {tool_name}")
+    if contract.dataset_inputs:
+        raise HTTPException(
+            422,
+            f"tool {tool_name} requires a dataset; run it from its tool page "
+            "where data is bound by reference",
+        )
 
     # Convert and validate inputs (params_raw must be {name: {value, unit}} format)
     try:

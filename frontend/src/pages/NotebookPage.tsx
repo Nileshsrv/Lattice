@@ -32,6 +32,11 @@ export function NotebookPage(props: { id: string }) {
         <BlockView key={block.id} block={block} onChange={load} />
       ))}
 
+      <CommentThread
+        artifactId={props.id}
+        blocks={notebook.blocks}
+      />
+
       <div className="card">
         <h2>Add block</h2>
         <div style={{ display: "flex", gap: 8 }}>
@@ -178,6 +183,87 @@ function FigureBlock(props: { block: any }) {
           </>
         )}
       </p>
+    </div>
+  );
+}
+
+function CommentThread(props: { artifactId: string; blocks: any[] }) {
+  const [comments, setComments] = useState<any[]>([]);
+  const [text, setText] = useState("");
+  const [anchorBlock, setAnchorBlock] = useState("");
+
+  const load = () =>
+    api
+      .get(`/api/artifacts/${props.artifactId}/comments?include_resolved=true`)
+      .then(setComments);
+  useEffect(() => {
+    load();
+  }, [props.artifactId]);
+
+  const blockLabel = (blockId: string) => {
+    const index = props.blocks.findIndex((b) => b.id === blockId);
+    if (index < 0) return "removed block";
+    const block = props.blocks[index];
+    const snippet =
+      block.type === "figure" ? block.content.caption : block.content.text;
+    return `block ${index + 1}: ${(snippet ?? "").slice(0, 40)}`;
+  };
+
+  return (
+    <div className="card">
+      <h2>Comments</h2>
+      {comments.length === 0 && (
+        <div className="empty">No comments on this notebook yet.</div>
+      )}
+      <ul className="plain">
+        {comments.map((c) => (
+          <li key={c.id} style={{ opacity: c.resolved ? 0.55 : 1 }}>
+            <span className="chip">v{c.artifact_version}</span>
+            {c.anchor?.block_id && (
+              <span className="chip accent">{blockLabel(c.anchor.block_id)}</span>
+            )}
+            {c.text}
+            <button
+              className="secondary"
+              style={{ marginLeft: 8, padding: "1px 8px", minHeight: 22 }}
+              onClick={async () => {
+                await api.patch(`/api/comments/${c.id}`, { resolved: !c.resolved });
+                load();
+              }}
+            >
+              {c.resolved ? "Reopen" : "Resolve"}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <select value={anchorBlock} onChange={(e) => setAnchorBlock(e.target.value)}>
+          <option value="">whole notebook</option>
+          {props.blocks.map((b, i) => (
+            <option key={b.id} value={b.id}>
+              {`block ${i + 1} (${b.type})`}
+            </option>
+          ))}
+        </select>
+        <input
+          value={text}
+          placeholder="Comment, anchored to the selection"
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button
+          disabled={!text.trim()}
+          onClick={async () => {
+            await api.post(`/api/artifacts/${props.artifactId}/comments`, {
+              text,
+              anchor: anchorBlock ? { block_id: anchorBlock } : null,
+            });
+            setText("");
+            load();
+          }}
+        >
+          Comment
+        </button>
+      </div>
     </div>
   );
 }

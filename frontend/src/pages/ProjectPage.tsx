@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
+import { AssistantPanel } from "../AssistantPanel";
+import { usePresence } from "../presence";
 
 export function ProjectPage(props: { id: string }) {
+  const presentUsers = usePresence(props.id);
   const [project, setProject] = useState<any>(null);
   const [datasets, setDatasets] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
@@ -44,13 +47,20 @@ export function ProjectPage(props: { id: string }) {
         )}
         <p>
           {project.members.map((m: any) => (
-            <span className="chip" key={m.username}>
+            <span
+              className={`chip ${presentUsers.includes(m.username) ? "ok" : ""}`}
+              key={m.username}
+              title={presentUsers.includes(m.username) ? "online now" : "offline"}
+            >
+              {presentUsers.includes(m.username) ? "● " : ""}
               {m.username} · {m.role}
             </span>
           ))}
         </p>
         <InviteForm projectId={props.id} myRole={project.my_role} onDone={load} />
       </div>
+
+      <AssistantPanel projectId={props.id} />
 
       <div className="row">
         <div className="card">

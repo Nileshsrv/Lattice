@@ -1,6 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 
-from . import config
+from . import config, ws
 from .db import Base, engine
 from .routes import assistant, auth, comments, comparisons, datasets, notebooks, projects, reports, review, runs, tools
 
@@ -22,6 +22,10 @@ def create_app() -> FastAPI:
     app.include_router(comments.router)
     app.include_router(review.router)
     app.include_router(assistant.router)
+
+    @app.websocket("/api/ws/projects/{project_id}")
+    async def project_presence(websocket: WebSocket, project_id: str):
+        await ws.presence_endpoint(websocket, project_id)
 
     @app.get("/api/health")
     def health():

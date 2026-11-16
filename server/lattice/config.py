@@ -15,9 +15,10 @@ MAX_PROJECT_BYTES = 1024 * 1024 * 1024
 
 SESSION_TTL_HOURS = 24 * 14
 
-# Run execution limits (DR-4). Memory caps are a known gap on Windows for the
-# slice; recorded in docs/stage3 limitations.
+# Run execution limits (DR-4): wall-clock per category, RSS cap enforced by a
+# watchdog that polls the worker process (works on Windows, unlike rlimits).
 RUN_TIMEOUT_SECONDS = {"instant": 20, "long-running": 180}
+RUN_MEMORY_LIMIT_MB = int(os.environ.get("LATTICE_RUN_MEMORY_LIMIT_MB", "1536"))
 
 
 def ensure_dirs() -> None:

@@ -52,11 +52,21 @@ def build_html(db: Session, project: Project, notebook: Notebook, title: str) ->
         }
 
     figure_count = 0
+    equation_count = 0
     for block in blocks:
         if block.type == "heading":
             sections.append({"kind": "heading", "text": block.content.get("text", "")})
         elif block.type == "text":
             sections.append({"kind": "text", "text": block.content.get("text", "")})
+        elif block.type == "equation":
+            equation_count += 1
+            sections.append(
+                {
+                    "kind": "equation",
+                    "number": equation_count,
+                    "latex": block.content.get("latex", ""),
+                }
+            )
         elif block.type == "figure":
             run_id = block.content["run_artifact_id"]
             artifact = db.get(Artifact, run_id)

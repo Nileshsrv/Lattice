@@ -134,7 +134,7 @@ class Notebook(Base):
     artifact: Mapped[Artifact] = relationship()
 
 
-BLOCK_TYPES = ("text", "heading", "figure")
+BLOCK_TYPES = ("text", "heading", "figure", "equation")
 
 
 class Block(Base):
@@ -163,6 +163,7 @@ class ReportVersion(Base):
     report_id: Mapped[str] = mapped_column(ForeignKey("reports.artifact_id"), index=True)
     number: Mapped[int] = mapped_column(Integer)
     html_sha256: Mapped[str] = mapped_column(String(64))
+    pdf_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     manifest: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

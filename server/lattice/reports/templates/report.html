@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
 <style>
   :root { color-scheme: light; }
   body { font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #fff;
@@ -23,6 +25,9 @@
   table.params { border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   table.params td, table.params th { border: 1px solid #d8dce2; padding: 4px 10px; text-align: left;
                                      font-variant-numeric: tabular-nums; }
+  .equation { display: flex; align-items: center; margin: 18px 0; font-size: 16px; }
+  .equation .eq-body { flex: 1; text-align: center; }
+  .equation .eq-number { color: #525a66; font-size: 13px; }
   .guard { border-left: 3px solid #b88700; background: #fdf7e7; padding: 8px 12px;
            font-size: 13.5px; margin: 10px 0; }
   .limitations li { margin-bottom: 6px; }
@@ -51,6 +56,11 @@
       <h2>{{ section.text }}</h2>
     {% elif section.kind == "text" %}
       <p>{{ section.text }}</p>
+    {% elif section.kind == "equation" %}
+      <div class="equation" data-eq-number="{{ section.number }}">
+        <span class="eq-body" data-latex="{{ section.latex }}">{{ section.latex }}</span>
+        <span class="eq-number">({{ section.number }})</span>
+      </div>
     {% elif section.kind == "unresolved" %}
       <p class="unresolved">{{ section.text }}</p>
     {% elif section.kind == "figure" %}
@@ -115,6 +125,15 @@
   <pre class="manifest">{{ manifest_json }}</pre>
 </main>
 <script>
+  window.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".eq-body").forEach(function (el) {
+      if (window.katex) {
+        try {
+          katex.render(el.getAttribute("data-latex"), el, { displayMode: true, throwOnError: false });
+        } catch (e) { /* raw LaTeX stays visible as honest fallback */ }
+      }
+    });
+  });
   document.querySelectorAll(".plot").forEach(function (el) {
     var data = JSON.parse(document.getElementById("data-" + el.id.split("-")[1]).textContent);
     var cols = data.columns, units = data.units || {};

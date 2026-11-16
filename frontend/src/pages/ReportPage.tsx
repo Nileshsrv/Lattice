@@ -79,8 +79,12 @@ export function ReportPage(props: { id: string }) {
                     HTML
                   </a>{" "}
                   ·{" "}
+                  <a href={`/api/reports/${props.id}/versions/${v.number}/pdf`} target="_blank" rel="noreferrer">
+                    PDF
+                  </a>{" "}
+                  ·{" "}
                   <button className="secondary" onClick={() => printVersion(v.number)}>
-                    Print / Save as PDF
+                    Print
                   </button>{" "}
                   ·{" "}
                   <a href={`/api/reports/${props.id}/versions/${v.number}/manifest`} target="_blank" rel="noreferrer">

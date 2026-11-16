@@ -1,3 +1,5 @@
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import { Plot } from "../Plot";
@@ -5,7 +7,7 @@ import { Plot } from "../Plot";
 export function NotebookPage(props: { id: string }) {
   const [notebook, setNotebook] = useState<any>(null);
   const [newText, setNewText] = useState("");
-  const [newType, setNewType] = useState<"text" | "heading">("text");
+  const [newType, setNewType] = useState<"text" | "heading" | "equation">("text");
 
   const load = () => api.get(`/api/notebooks/${props.id}`).then(setNotebook);
   useEffect(() => {
@@ -43,10 +45,17 @@ export function NotebookPage(props: { id: string }) {
           <select value={newType} onChange={(e) => setNewType(e.target.value as any)}>
             <option value="text">text</option>
             <option value="heading">heading</option>
+            <option value="equation">equation</option>
           </select>
           <input
             value={newText}
-            placeholder={newType === "heading" ? "Heading text" : "Paragraph text"}
+            placeholder={
+              newType === "heading"
+                ? "Heading text"
+                : newType === "equation"
+                ? "LaTeX, e.g. T = \\left[1 + \\frac{V_0^2 \\sinh^2(\\kappa a)}{4E(V_0 - E)}\\right]^{-1}"
+                : "Paragraph text"
+            }
             onChange={(e) => setNewText(e.target.value)}
           />
           <button
@@ -54,7 +63,7 @@ export function NotebookPage(props: { id: string }) {
             onClick={async () => {
               await api.post(`/api/notebooks/${props.id}/blocks`, {
                 type: newType,
-                content: { text: newText },
+                content: newType === "equation" ? { latex: newText } : { text: newText },
               });
               setNewText("");
               load();
@@ -75,11 +84,12 @@ function BlockView(props: { block: any; onChange: () => void }) {
   const [conflict, setConflict] = useState<any>(null);
 
   if (block.type === "figure") return <FigureBlock block={block} />;
+  const isEquation = block.type === "equation";
 
   const save = async (revision: number) => {
     try {
       await api.patch(`/api/blocks/${block.id}`, {
-        content: { text: draft },
+        content: isEquation ? { latex: draft } : { text: draft },
         revision,
       });
       setEditing(false);
@@ -100,7 +110,7 @@ function BlockView(props: { block: any; onChange: () => void }) {
           {conflict && (
             <div className="guard">
               Someone else edited this block (now revision {conflict.server_revision}):
-              <p className="muted">"{conflict.server_content.text}"</p>
+              <p className="muted">"{conflict.server_content.text ?? conflict.server_content.latex}"</p>
               Your edit was NOT applied. Keep yours (overwrites theirs) or take theirs.
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button onClick={() => save(conflict.server_revision)}>Keep mine</button>
@@ -129,12 +139,26 @@ function BlockView(props: { block: any; onChange: () => void }) {
       ) : (
         <div
           onDoubleClick={() => {
-            setDraft(block.content.text ?? "");
+            setDraft((isEquation ? block.content.latex : block.content.text) ?? "");
             setEditing(true);
           }}
           title="Double-click to edit"
         >
-          {block.type === "heading" ? <h2>{block.content.text}</h2> : <p>{block.content.text}</p>}
+          {isEquation ? (
+            <div
+              style={{ textAlign: "center", fontSize: 17 }}
+              dangerouslySetInnerHTML={{
+                __html: katex.renderToString(block.content.latex ?? "", {
+                  displayMode: true,
+                  throwOnError: false,
+                }),
+              }}
+            />
+          ) : block.type === "heading" ? (
+            <h2>{block.content.text}</h2>
+          ) : (
+            <p>{block.content.text}</p>
+          )}
         </div>
       )}
     </div>

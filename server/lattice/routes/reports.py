@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from ..db import get_db
 from ..deps import current_user, require_member
 from ..models import Artifact, Notebook, Report, ReportVersion, Run, User
 from ..reports.builder import build_html
+from ..reports.pdf import render_pdf
 from ..store import objects
 
 router = APIRouter(prefix="/api", tags=["reports"])
@@ -223,6 +224,37 @@ def report_html(
     if version is None:
         raise HTTPException(404, "no such report version")
     return HTMLResponse(objects.get(version.html_sha256).decode())
+
+
+@router.get("/reports/{report_id}/versions/{number}/pdf")
+def report_pdf(
+    report_id: str,
+    number: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _artifact, _report = _get_report(db, user, report_id)
+    version = (
+        db.query(ReportVersion)
+        .filter(ReportVersion.report_id == report_id, ReportVersion.number == number)
+        .one_or_none()
+    )
+    if version is None:
+        raise HTTPException(404, "no such report version")
+    if version.pdf_sha256 is None:
+        # Render once from the frozen HTML, then cache by content hash.
+        pdf_bytes = render_pdf(objects.get(version.html_sha256).decode())
+        version.pdf_sha256 = objects.put(pdf_bytes)
+        db.commit()
+    else:
+        pdf_bytes = objects.get(version.pdf_sha256)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="report-v{number}.pdf"'
+        },
+    )
 
 
 @router.get("/reports/{report_id}/versions/{number}/manifest")

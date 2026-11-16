@@ -65,6 +65,29 @@ and the verified state of the whole stage.
   export, Plotly bundle size, regression column naming) are unchanged and tracked
   in docs/stage3 and docs/stage4.
 
+## Polish pass (after Stage 5 sign-off)
+
+1. **Equation blocks**: new notebook block type rendered with KaTeX in the app
+   and in exported reports (numbered display equations; raw LaTeX is the
+   fallback if the CDN is unreachable). Closes the last MVP checklist gap.
+2. **Server-side PDF export** (DR-9 landed): `GET /reports/{id}/versions/{n}/pdf`
+   prints the frozen HTML version in headless Chromium, caches the PDF in the
+   object store by hash, and serves it; 503 with install instructions when
+   Playwright/Chromium is absent. The browser Print button remains.
+3. **Worker memory caps**: an RSS watchdog (psutil) polls the worker during
+   execution and kills + rebuilds the pool over the limit
+   (`LATTICE_RUN_MEMORY_LIMIT_MB`, default 1536). Closes the Windows gap from
+   docs/stage3.
+4. **Bundle diet**: Plotly swapped to the basic distribution — main JS bundle
+   4.85 MB → 1.68 MB.
+
+Verified: 54 backend tests pass (equation round-trip into report HTML, watchdog
+unit tests, real PDF capture asserted by magic bytes and cache stability);
+frontend build clean; equation rendering and a 109 KB PDF export exercised live
+in the browser. Remaining known gaps: exported HTML/PDF still need network for
+CDN figures; the dev server must be restarted after dependency changes (vite
+optimize cache).
+
 ## MVP acceptance criteria (§13) — status
 
 Create project & invite ✓ · project holds datasets/notes/equations*/simulations/

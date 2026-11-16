@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from . import config
 from .db import Base, engine
-from .routes import auth, datasets, notebooks, projects, reports, runs, tools
+from .routes import assistant, auth, comments, comparisons, datasets, notebooks, projects, reports, review, runs, tools
 
 
 def create_app() -> FastAPI:
@@ -16,8 +16,12 @@ def create_app() -> FastAPI:
     app.include_router(datasets.router)
     app.include_router(tools.router)
     app.include_router(runs.router)
+    app.include_router(comparisons.router)
     app.include_router(notebooks.router)
     app.include_router(reports.router)
+    app.include_router(comments.router)
+    app.include_router(review.router)
+    app.include_router(assistant.router)
 
     @app.get("/api/health")
     def health():

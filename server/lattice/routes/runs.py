@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from datetime import datetime, timezone
 
@@ -33,9 +35,11 @@ class RunCreate(BaseModel):
 def _run_json(artifact: Artifact, run: Run) -> dict:
     return {
         "artifact_id": artifact.id,
+        "project_id": artifact.project_id,
         "name": artifact.name,
         "version": artifact.version,
         "provenance_label": artifact.provenance_label,
+        "review_state": artifact.review_state,
         "tool_id": run.tool_id,
         "tool_version": run.tool_version,
         "status": run.status,
@@ -94,14 +98,17 @@ def create_run(
         dataset = db.get(Dataset, artifact_ref)
         parsed = parse_csv(objects.get(dataset.sha256))
         columns: dict[str, list[float]] = {}
+        column_units: dict[str, str | None] = {}
         for col in spec.required_columns:
             try:
                 columns[col["name"]] = column_in_canonical_unit(
                     parsed, col["name"], col["canonical_unit"]
                 )
+                source_column = next(item for item in parsed["columns"] if item["name"] == col["name"])
+                column_units[col["name"]] = col["canonical_unit"] or source_column["unit"]
             except ValueError as exc:
                 raise HTTPException(422, f"'{spec.name}': {exc}")
-        data_payload[spec.name] = columns
+        data_payload[spec.name] = {**columns, "_units": column_units}
         input_artifacts[spec.name] = {
             "artifact_id": ds_artifact.id,
             "version": ds_artifact.version,
@@ -225,6 +232,44 @@ def run_detail(
     return _run_json(artifact, run)
 
 
+@router.get("/runs/{artifact_id}/lineage")
+def run_lineage(
+    artifact_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Walk parent_run links upward and return the ancestor chain (up to 20 hops)."""
+    artifact, run = _get_run(db, user, artifact_id)
+    chain = [
+        {
+            "artifact_id": artifact.id,
+            "name": artifact.name,
+            "created_at": artifact.created_at.isoformat(),
+            "parent_run": run.parent_run,
+        }
+    ]
+    seen = {artifact_id}
+    current_parent = run.parent_run
+    for _ in range(19):  # up to 19 more hops (20 total entries)
+        if current_parent is None or current_parent in seen:
+            break
+        seen.add(current_parent)
+        parent_artifact = db.get(Artifact, current_parent)
+        parent_run = db.get(Run, current_parent)
+        if parent_artifact is None or parent_run is None:
+            break
+        chain.append(
+            {
+                "artifact_id": parent_artifact.id,
+                "name": parent_artifact.name,
+                "created_at": parent_artifact.created_at.isoformat(),
+                "parent_run": parent_run.parent_run,
+            }
+        )
+        current_parent = parent_run.parent_run
+    return chain
+
+
 @router.get("/runs/{artifact_id}/arrays/{array_name}")
 def run_array(
     artifact_id: str,
@@ -237,3 +282,93 @@ def run_array(
     if ref is None:
         raise HTTPException(404, f"run has no array '{array_name}'")
     return json.loads(objects.get(ref["sha256"]))
+
+
+class PromoteArrayRequest(BaseModel):
+    name: str | None = None
+    column_mapping: dict[str, str] | None = None
+
+
+@router.post("/runs/{artifact_id}/arrays/{array_name}/promote")
+def promote_array_to_dataset(
+    artifact_id: str,
+    array_name: str,
+    body: PromoteArrayRequest | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    artifact, run = _get_run(db, user, artifact_id)
+    require_member(db, artifact.project_id, user, roles=WRITER_ROLES)
+    ref = run.arrays.get(array_name)
+    if ref is None:
+        raise HTTPException(404, f"run has no array '{array_name}'")
+    array_data = json.loads(objects.get(ref["sha256"]))
+    columns_data = array_data.get("columns", {})
+    units_data = array_data.get("units", {})
+
+    mapping = (body.column_mapping if body else None) or {}
+
+    col_names = list(columns_data.keys())
+    if not col_names:
+        raise HTTPException(422, "array has no columns")
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+
+    headers = []
+    for col in col_names:
+        out_name = mapping.get(col, col)
+        unit = units_data.get(col, "")
+        headers.append(f"{out_name} [{unit}]" if unit else out_name)
+    writer.writerow(headers)
+
+    n_rows = len(columns_data[col_names[0]])
+    for i in range(n_rows):
+        writer.writerow([format(columns_data[col][i], ".17g") for col in col_names])
+
+    csv_bytes = output.getvalue().encode("utf-8")
+    parsed = parse_csv(csv_bytes)
+    sha = objects.put(csv_bytes)
+
+    ds_name = (body.name if body and body.name else None) or f"{artifact.name} — {array_name}"
+    ds_artifact = Artifact(
+        project_id=artifact.project_id,
+        type="dataset",
+        name=ds_name,
+        provenance_label="calculated",
+        created_by=user.id,
+    )
+    db.add(ds_artifact)
+    db.flush()
+
+    dataset = Dataset(
+        artifact_id=ds_artifact.id,
+        sha256=sha,
+        size=len(csv_bytes),
+        format="csv",
+        columns=parsed["columns"],
+        source={
+            "derived_from_run": artifact.id,
+            "array_name": array_name,
+            "n_rows": n_rows,
+        },
+        unknowns=[],
+    )
+    db.add(dataset)
+    db.add(ArtifactEdge(from_artifact=artifact.id, to_artifact=ds_artifact.id, kind="derived-from"))
+    record(
+        db,
+        artifact.project_id,
+        user.id,
+        "dataset.promoted",
+        {"artifact_id": ds_artifact.id, "run_id": artifact.id, "array_name": array_name},
+    )
+    db.commit()
+    return {
+        "artifact_id": ds_artifact.id,
+        "name": ds_artifact.name,
+        "sha256": dataset.sha256,
+        "size": dataset.size,
+        "columns": dataset.columns,
+        "provenance_label": ds_artifact.provenance_label,
+    }

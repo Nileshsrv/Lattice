@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -7,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..activity import record
 from ..db import get_db
 from ..deps import current_user, require_member
-from ..models import Artifact, Notebook, Report, ReportVersion, User
+from ..models import Artifact, Notebook, Report, ReportVersion, Run, User
 from ..reports.builder import build_html
 from ..store import objects
 
@@ -19,6 +21,7 @@ WRITER_ROLES = ("owner", "editor", "collaborator")
 class ReportCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     notebook_id: str
+    report_type: str = "lab-report"
 
 
 @router.post("/projects/{project_id}/reports")
@@ -35,10 +38,10 @@ def create_report(
     artifact = Artifact(project_id=project_id, type="report", name=body.title, created_by=user.id)
     db.add(artifact)
     db.flush()
-    db.add(Report(artifact_id=artifact.id, title=body.title, notebook_id=body.notebook_id))
+    db.add(Report(artifact_id=artifact.id, title=body.title, notebook_id=body.notebook_id, report_type=body.report_type))
     record(db, project_id, user.id, "report.created", {"artifact_id": artifact.id})
     db.commit()
-    return {"artifact_id": artifact.id, "title": body.title}
+    return {"artifact_id": artifact.id, "title": body.title, "report_type": body.report_type}
 
 
 @router.get("/projects/{project_id}/reports")
@@ -54,7 +57,13 @@ def list_reports(
         .all()
     )
     return [
-        {"artifact_id": a.id, "title": r.title, "notebook_id": r.notebook_id, "version": a.version}
+        {
+            "artifact_id": a.id,
+            "title": r.title,
+            "notebook_id": r.notebook_id,
+            "report_type": r.report_type,
+            "version": a.version,
+        }
         for a, r in rows
     ]
 
@@ -118,6 +127,7 @@ def report_detail(
         "artifact_id": artifact.id,
         "title": report.title,
         "notebook_id": report.notebook_id,
+        "report_type": report.report_type,
         "versions": [
             {
                 "number": v.number,
@@ -127,6 +137,73 @@ def report_detail(
             }
             for v in versions
         ],
+    }
+
+
+@router.get("/reports/{report_id}/staleness")
+def report_staleness(
+    report_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    artifact, report = _get_report(db, user, report_id)
+    latest_version = (
+        db.query(ReportVersion)
+        .filter(ReportVersion.report_id == report_id)
+        .order_by(ReportVersion.number.desc())
+        .first()
+    )
+
+    if latest_version is None:
+        return {
+            "report_id": report_id,
+            "stale": False,
+            "stale_artifacts": [],
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    manifest = latest_version.manifest
+    stale_artifacts: list[str] = []
+
+    # Check notebook version
+    nb_info = manifest.get("notebook") or {}
+    if nb_info.get("artifact_id"):
+        nb_art = db.get(Artifact, nb_info["artifact_id"])
+        if nb_art and nb_art.version > nb_info.get("version", 1):
+            stale_artifacts.append(nb_art.id)
+
+    # Check each artifact in the report manifest
+    for entry in manifest.get("artifacts", []):
+        art_id = entry.get("artifact_id")
+        if not art_id:
+            continue
+        art = db.get(Artifact, art_id)
+        if art is None:
+            stale_artifacts.append(art_id)
+            continue
+        if art.version != entry.get("version"):
+            stale_artifacts.append(art_id)
+            continue
+
+        # If it's a Run, check if its inputs have changed
+        if art.type == "run":
+            run = db.get(Run, art_id)
+            if run and run.input_artifacts:
+                for _input_name, input_meta in run.input_artifacts.items():
+                    parent_ds_id = input_meta.get("artifact_id")
+                    if parent_ds_id:
+                        parent_art = db.get(Artifact, parent_ds_id)
+                        if parent_art:
+                            # If input dataset was updated or created after the run started
+                            if parent_art.version > input_meta.get("version", 1):
+                                stale_artifacts.append(art_id)
+                                break
+
+    return {
+        "report_id": report_id,
+        "stale": len(stale_artifacts) > 0,
+        "stale_artifacts": list(set(stale_artifacts)),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

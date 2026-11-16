@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { DatasetPage } from "./pages/DatasetPage";
+import { ComparisonPage } from "./pages/ComparisonPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotebookPage } from "./pages/NotebookPage";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -54,6 +55,8 @@ export function App() {
     page = <DatasetPage id={route[1]} />;
   } else if (route[0] === "report" && route[1]) {
     page = <ReportPage id={route[1]} />;
+  } else if (route[0] === "compare" && route[1]) {
+    page = <ComparisonPage id={route[1]} />;
   }
 
   return (

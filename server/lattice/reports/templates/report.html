@@ -29,6 +29,12 @@
   .unresolved { color: #a03030; border: 1px dashed #a03030; padding: 8px 12px; }
   pre.manifest { font-size: 11px; background: #f4f6f8; border: 1px solid #e2e6ea;
                  padding: 12px; overflow-x: auto; }
+  @media print {
+    main { max-width: none; padding: 0; }
+    .figure, table, pre.manifest { break-inside: avoid; }
+    .figure .plot { height: 340px; }
+    a { color: inherit; text-decoration: none; }
+  }
 </style>
 </head>
 <body>
@@ -50,7 +56,7 @@
     {% elif section.kind == "figure" %}
       <div class="figure">
         {% if section.array_json %}
-          <div class="plot" id="plot-{{ section.number }}"></div>
+          <div class="plot" id="plot-{{ section.number }}" data-array="{{ section.array_name or '' }}"></div>
           <script type="application/json" id="data-{{ section.number }}">{{ section.array_json | safe }}</script>
         {% endif %}
         <div class="caption"><b>Figure {{ section.number }}.</b> {{ section.caption }}</div>
@@ -112,20 +118,35 @@
   document.querySelectorAll(".plot").forEach(function (el) {
     var data = JSON.parse(document.getElementById("data-" + el.id.split("-")[1]).textContent);
     var cols = data.columns, units = data.units || {};
-    var xKey = "wavelength" in cols ? "wavelength" : Object.keys(cols)[0];
+    var xKey = "wavelength" in cols ? "wavelength" : "position" in cols ? "position" : "angle" in cols ? "angle" : "x" in cols ? "x" : Object.keys(cols)[0];
     var traces = [];
     Object.keys(cols).forEach(function (key) {
       if (key === xKey || key === "residual") return;
       traces.push({
-        x: cols[xKey], y: cols[key], name: key,
+        x: cols[xKey].map(function (value) {
+          if (xKey === "wavelength") return value * 1e9;
+          if (xKey === "position") return value * 1e9;
+          if (xKey === "angle") return value * 180 / Math.PI;
+          return value;
+        }), y: cols[key], name: key,
         mode: key === "fitted" ? "lines" : "markers",
         marker: { size: 3 }, line: { width: 2 }
       });
     });
+    traces.forEach(function (trace) {
+      if (["fitted", "potential", "probability_density", "differential_cross_section"].includes(trace.name)) trace.mode = "lines";
+    });
+    var xLabel = xKey;
+    if (xKey === "wavelength") xLabel += " [nm]";
+    else if (xKey === "position") xLabel += " [nm]";
+    else if (xKey === "angle") xLabel += " [deg]";
+    else if (units[xKey]) xLabel += " [" + units[xKey] + "]";
+    var firstY = traces.length ? traces[0].name : "value";
+    var yLabel = firstY + (units[firstY] ? " [" + units[firstY] + "]" : "");
     Plotly.newPlot(el, traces, {
       margin: { t: 16, r: 16, b: 48, l: 56 },
-      xaxis: { title: xKey + (units[xKey] ? " [" + units[xKey] + "]" : ""), exponentformat: "power" },
-      yaxis: { title: "flux" + (units.flux ? " [" + units.flux + "]" : "") },
+      xaxis: { title: xLabel, exponentformat: "power" },
+      yaxis: { title: yLabel },
       legend: { orientation: "h" }, font: { size: 12 }
     }, { displayModeBar: false, responsive: true });
   });

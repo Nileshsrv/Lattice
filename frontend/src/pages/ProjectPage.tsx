@@ -8,6 +8,7 @@ export function ProjectPage(props: { id: string }) {
   const [notebooks, setNotebooks] = useState<any[]>([]);
   const [tools, setTools] = useState<any[]>([]);
   const [error, setError] = useState("");
+  const [comparisonRuns, setComparisonRuns] = useState<string[]>([]);
 
   const load = async () => {
     try {
@@ -93,6 +94,22 @@ export function ProjectPage(props: { id: string }) {
       <div className="row">
         <div className="card">
           <h2>Runs</h2>
+          {runs.length >= 2 && (
+            <div className="field-unit">
+              <select value={comparisonRuns[0] ?? ""} onChange={(event) => setComparisonRuns([event.target.value, comparisonRuns[1] ?? ""])}>
+                <option value="">Select first completed run</option>
+                {runs.filter((run: any) => run.status === "completed").map((run: any) => <option key={run.artifact_id} value={run.artifact_id}>{run.name}</option>)}
+              </select>
+              <select value={comparisonRuns[1] ?? ""} onChange={(event) => setComparisonRuns([comparisonRuns[0] ?? "", event.target.value])}>
+                <option value="">Select second completed run</option>
+                {runs.filter((run: any) => run.status === "completed" && run.artifact_id !== comparisonRuns[0]).map((run: any) => <option key={run.artifact_id} value={run.artifact_id}>{run.name}</option>)}
+              </select>
+              <button disabled={!comparisonRuns[0] || !comparisonRuns[1]} onClick={async () => {
+                const comparison = await api.post(`/api/projects/${props.id}/comparisons`, { run_a: comparisonRuns[0], run_b: comparisonRuns[1] });
+                window.location.hash = `/compare/${comparison.artifact_id}`;
+              }}>Compare and save</button>
+            </div>
+          )}
           {runs.length === 0 ? (
             <div className="empty">No runs yet — open a Workbench tool.</div>
           ) : (

@@ -3,18 +3,36 @@ import { api } from "../api";
 
 export function ReportPage(props: { id: string }) {
   const [report, setReport] = useState<any>(null);
+  const [staleness, setStaleness] = useState<any>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = () => api.get(`/api/reports/${props.id}`).then(setReport);
+  const load = () => {
+    api.get(`/api/reports/${props.id}`).then(setReport);
+    api.get(`/api/reports/${props.id}/staleness`).then(setStaleness).catch(() => {});
+  };
   useEffect(() => {
     load();
   }, [props.id]);
 
   if (!report) return null;
 
+  const printVersion = (version: number) => {
+    const printWindow = window.open(`/api/reports/${props.id}/versions/${version}/html`, "_blank");
+    if (!printWindow) return;
+    printWindow.addEventListener("load", () => {
+      printWindow.setTimeout(() => printWindow.print(), 500);
+    }, { once: true });
+  };
+
   return (
     <div className="card">
-      <h2>{report.title}</h2>
+      <h2>
+        {report.title}{" "}
+        <span className="chip">{report.report_type || "lab-report"}</span>
+        {staleness?.stale && (
+          <span className="chip warn">Sources changed since last export</span>
+        )}
+      </h2>
       <p className="muted">
         Assembled from saved artifacts in notebook{" "}
         <a href={`#/nb/${report.notebook_id}`} className="mono">
@@ -60,6 +78,10 @@ export function ReportPage(props: { id: string }) {
                   <a href={`/api/reports/${props.id}/versions/${v.number}/html`} target="_blank" rel="noreferrer">
                     HTML
                   </a>{" "}
+                  ·{" "}
+                  <button className="secondary" onClick={() => printVersion(v.number)}>
+                    Print / Save as PDF
+                  </button>{" "}
                   ·{" "}
                   <a href={`/api/reports/${props.id}/versions/${v.number}/manifest`} target="_blank" rel="noreferrer">
                     manifest

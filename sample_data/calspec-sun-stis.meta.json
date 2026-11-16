@@ -1,0 +1,22 @@
+{
+  "name": "calspec-sun-stis",
+  "kind": "observation",
+  "description": "HST CALSPEC solar reference spectrophotometric standard spectrum (sun_reference_stis_002.fits). Composite from STIS observations and reference measurements extending from UV (119.5 nm) to NIR (2695.7 nm).",
+  "provenance_label": "measured",
+  "target": "Sun",
+  "source": "STScI CALSPEC Calibration Database (https://archive.stsci.edu/hlsps/reference-atlases/cdbs/calspec/sun_reference_stis_002.fits)",
+  "access_date": "2026-11-16",
+  "license": "CC0-1.0",
+  "attribution": "Space Telescope Science Institute (STScI) / NASA CALSPEC database",
+  "columns": {
+    "wavelength_nm": "nm",
+    "flux [erg/(s*cm2*Angstrom)]": "erg / (s * cm^2 * Angstrom)",
+    "error [erg/(s*cm2*Angstrom)]": "erg / (s * cm^2 * Angstrom)"
+  },
+  "n_rows": 1467,
+  "wavelength_range_nm": [
+    119.5,
+    2695.735107421875
+  ],
+  "known_unknowns": []
+}

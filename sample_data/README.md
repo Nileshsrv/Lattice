@@ -13,5 +13,19 @@ parameters in `sample-spectrum.meta.json`.
 - Flux is relative (arbitrary units); absolute calibration is intentionally
   unknown, so the unknown-metadata flow is exercised end-to-end.
 
-A real public-domain archive spectrum is planned for Stage 4 (decision D6),
-with its source, access date, and license recorded at import.
+## calspec-sun-stis.csv
+
+**Real observational archive spectrum**: Solar spectrophotometric standard
+spectrum from the STScI CALSPEC Calibration Database
+(`sun_reference_stis_002.fits`). It is a composite standard spectrum
+incorporating Space Telescope Imaging Spectrograph (STIS) observations and
+ground/space reference measurements extending from UV (119.5 nm) to NIR
+(2695.7 nm).
+
+- License: CC0-1.0 (NASA / STScI open data policy and public domain release).
+- Source: STScI CALSPEC Calibration Database
+  (https://archive.stsci.edu/hlsps/reference-atlases/cdbs/calspec/sun_reference_stis_002.fits).
+- Access date: 2026-11-16.
+- Import with provenance label **measured**.
+- Absolute flux calibrated in `erg/(s*cm2*Angstrom)` with documented systematic error.
+- Full metadata recorded in `calspec-sun-stis.meta.json`.

@@ -15,5 +15,7 @@ sigma_sb = _sc.sigma           # Stefan-Boltzmann constant [W m^-2 K^-4]
 b_wien = _sc.Wien              # Wien displacement constant [m K]
 m_e = _sc.m_e                  # electron mass [kg]
 e_charge = _sc.e               # elementary charge [C]
+classical_electron_radius = _sc.physical_constants["classical electron radius"][0]  # [m]
+thomson_cross_section = _sc.physical_constants["Thomson cross section"][0]  # [m^2]
 
 CODATA_SOURCE = f"scipy.constants (CODATA), scipy=={scipy.__version__}"

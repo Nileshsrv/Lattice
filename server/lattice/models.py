@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -55,7 +55,7 @@ class Member(Base):
 
 
 PROVENANCE_LABELS = ("measured", "calculated", "simulated", "estimated", "ai-suggested")
-ARTIFACT_TYPES = ("dataset", "run", "notebook", "report")
+ARTIFACT_TYPES = ("dataset", "run", "notebook", "report", "comparison")
 
 
 class Artifact(Base):
@@ -71,7 +71,7 @@ class Artifact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-EDGE_KINDS = ("derived-from", "produced-by", "input-to", "cites", "anchors-to")
+EDGE_KINDS = ("derived-from", "produced-by", "input-to", "cites", "anchors-to", "compares-a", "compares-b")
 
 
 class ArtifactEdge(Base):
@@ -152,6 +152,7 @@ class Report(Base):
     artifact_id: Mapped[str] = mapped_column(ForeignKey("artifacts.id"), primary_key=True)
     title: Mapped[str] = mapped_column(String(300))
     notebook_id: Mapped[str | None] = mapped_column(ForeignKey("notebooks.artifact_id"), nullable=True)
+    report_type: Mapped[str] = mapped_column(String(50), default="lab-report")
 
     artifact: Mapped[Artifact] = relationship()
 
@@ -174,3 +175,18 @@ class ActivityEvent(Base):
     kind: Mapped[str] = mapped_column(String(50))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    artifact_id: Mapped[str | None] = mapped_column(ForeignKey("artifacts.id"), nullable=True, index=True)
+    artifact_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    anchor: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    text: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolved_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

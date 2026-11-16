@@ -20,4 +20,4 @@ node_modules/
 dist/
 .env
 *.sqlite
-*.db
+*.dbfrontend/*.tsbuildinfo

@@ -154,12 +154,9 @@ function FigureBlock(props: { block: any }) {
     <div className="card">
       {fit && (
         <Plot
-          series={[
-            { x: fit.columns.wavelength.map((w: number) => w * 1e9), y: fit.columns.flux, name: "data" },
-            { x: fit.columns.wavelength.map((w: number) => w * 1e9), y: fit.columns.fitted, name: "fitted", mode: "lines" },
-          ]}
-          xLabel="wavelength [nm]"
-          yLabel="flux [arb]"
+          series={arraySeries(fit)}
+          xLabel={arrayAxisLabel(fit, Object.keys(fit.columns)[0])}
+          yLabel={arrayAxisLabel(fit, Object.keys(fit.columns).find((key: string) => key !== Object.keys(fit.columns)[0]) ?? "")}
         />
       )}
       <p className="muted">
@@ -183,4 +180,22 @@ function FigureBlock(props: { block: any }) {
       </p>
     </div>
   );
+}
+
+function arrayAxisLabel(array: any, key: string) {
+  const unit = array.units?.[key];
+  return unit ? `${key} [${unit}]` : key;
+}
+
+function arraySeries(array: any) {
+  const columns = array.columns ?? {};
+  const xKey = "wavelength" in columns ? "wavelength" : "position" in columns ? "position" : "angle" in columns ? "angle" : "x" in columns ? "x" : Object.keys(columns)[0];
+  return Object.keys(columns)
+    .filter((key) => key !== xKey && key !== "residual")
+    .map((key) => ({
+      x: columns[xKey].map((value: number) => xKey === "wavelength" ? value * 1e9 : xKey === "angle" ? value * 180 / Math.PI : value),
+      y: columns[key],
+      name: key,
+      mode: ["fitted", "potential", "probability_density", "differential_cross_section"].includes(key) ? "lines" : "markers",
+    }));
 }

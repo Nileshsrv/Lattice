@@ -5,18 +5,29 @@ import { Plot } from "../Plot";
 const UNIT_CHOICES: Record<string, string[]> = {
   m: ["nm", "Angstrom", "um", "m"],
   K: ["K"],
+  J: ["eV", "keV", "MeV", "J"],
+  rad: ["deg", "rad"],
+  kg: ["kg"],
   "": [""],
 };
 
 export function ToolPage(props: { projectId: string; toolId: string }) {
+  const hash = window.location.hash;
+  const searchIndex = hash.indexOf("?");
+  const searchParams = searchIndex !== -1 ? new URLSearchParams(hash.slice(searchIndex)) : new URLSearchParams();
+  const parentRunId = searchParams.get("parent_run");
+
   const [contract, setContract] = useState<any>(null);
   const [datasets, setDatasets] = useState<any[]>([]);
   const [notebooks, setNotebooks] = useState<any[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [units, setUnits] = useState<Record<string, string>>({});
   const [bindings, setBindings] = useState<Record<string, string>>({});
+  const [parentRun, setParentRun] = useState<any>(null);
   const [run, setRun] = useState<any>(null);
   const [fitArray, setFitArray] = useState<any>(null);
+  const [geometryArray, setGeometryArray] = useState<any>(null);
+  const [tunnelingArrays, setTunnelingArrays] = useState<Record<string, any>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [addedTo, setAddedTo] = useState("");
@@ -30,7 +41,17 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
     });
     api.get(`/api/projects/${props.projectId}/datasets`).then(setDatasets);
     api.get(`/api/projects/${props.projectId}/notebooks`).then(setNotebooks);
-  }, [props.toolId, props.projectId]);
+    if (parentRunId) {
+      api.get(`/api/runs/${parentRunId}`).then((r) => {
+        setParentRun(r);
+        const v: Record<string, string> = {};
+        for (const [k, spec] of Object.entries(r.inputs || {})) {
+          v[k] = String((spec as any).value);
+        }
+        setValues((prev) => ({ ...v, ...prev }));
+      }).catch(() => {});
+    }
+  }, [props.toolId, props.projectId, parentRunId]);
 
   if (!contract) return null;
 
@@ -39,6 +60,8 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
     setError("");
     setRun(null);
     setFitArray(null);
+    setGeometryArray(null);
+    setTunnelingArrays({});
     setAddedTo("");
     const inputs: Record<string, any> = {};
     for (const input of contract.inputs) {
@@ -52,11 +75,20 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
         tool_id: props.toolId,
         inputs,
         datasets: bindings,
+        parent_run: parentRunId || undefined,
       });
       setRun(result);
       if (result.arrays?.fit) {
         setFitArray(await api.get(`/api/runs/${result.artifact_id}/arrays/fit`));
       }
+      if (result.arrays?.geometry) {
+        setGeometryArray(await api.get(`/api/runs/${result.artifact_id}/arrays/geometry`));
+      }
+      const plottedArrays: Record<string, any> = {};
+      for (const name of ["barrier_profile", "wavefunction", "residuals", "energy_sweep"]) {
+        if (result.arrays?.[name]) plottedArrays[name] = await api.get(`/api/runs/${result.artifact_id}/arrays/${name}`);
+      }
+      setTunnelingArrays(plottedArrays);
     } catch (e) {
       if (e instanceof ApiError && typeof e.detail === "object" && e.detail !== null) {
         const d = e.detail as any;
@@ -74,7 +106,7 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
       type: "figure",
       content: {
         run_artifact_id: run.artifact_id,
-        array: run.arrays?.fit ? "fit" : undefined,
+        array: Object.keys(run.arrays)[0],
         caption: `${contract.name} — ${run.name}`,
       },
     });
@@ -84,6 +116,12 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
   return (
     <>
       <div className="card">
+        {parentRunId && (
+          <div style={{ padding: "8px 12px", marginBottom: 12, borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>
+            <strong>Creating Variant:</strong> Branching from parent run{" "}
+            <a href={`#/runs/${parentRunId}`}>{parentRun?.name || parentRunId}</a>
+          </div>
+        )}
         <h2>
           {contract.name}{" "}
           <span className="chip accent">{contract.maturity}</span>
@@ -136,6 +174,9 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
                 </select>
               </div>
             </div>
+          ))}
+          {contract.outputs.map((output: any) => (
+            <div key={output.name} className="muted">{output.label} · {output.unit || "dimensionless"}</div>
           ))}
           {error && <p className="error-text">{error}</p>}
           <div style={{ marginTop: 14 }}>
@@ -215,6 +256,40 @@ export function ToolPage(props: { projectId: string; toolId: string }) {
                   xLabel="wavelength [nm]"
                   yLabel="flux [arb]"
                 />
+              )}
+              {geometryArray && (
+                <Plot
+                  series={[{
+                    x: geometryArray.columns.angle.map((angle: number) => angle * 180 / Math.PI),
+                    y: geometryArray.columns.differential_cross_section,
+                    name: "Klein–Nishina",
+                    mode: "lines",
+                  }]}
+                  xLabel="scattering angle [deg]"
+                  yLabel="dσ/dΩ [m²/sr]"
+                />
+              )}
+              {tunnelingArrays.barrier_profile && (
+                <Plot series={[{ x: tunnelingArrays.barrier_profile.columns.position.map((x: number) => x * 1e9), y: tunnelingArrays.barrier_profile.columns.potential.map((v: number) => v / 1.602176634e-19), name: "potential", mode: "lines" }]} xLabel="position [nm]" yLabel="potential [eV]" />
+              )}
+              {tunnelingArrays.wavefunction && (
+                <Plot series={[{ x: tunnelingArrays.wavefunction.columns.position.map((x: number) => x * 1e9), y: tunnelingArrays.wavefunction.columns.probability_density, name: "relative probability density", mode: "lines" }]} xLabel="position [nm]" yLabel="relative probability density" />
+              )}
+              {tunnelingArrays.residuals && (
+                <Plot series={[{ x: tunnelingArrays.residuals.columns.x, y: tunnelingArrays.residuals.columns.observed, name: "observed" }, { x: tunnelingArrays.residuals.columns.x, y: tunnelingArrays.residuals.columns.fitted, name: "linear fit", mode: "lines" }, { x: tunnelingArrays.residuals.columns.x, y: tunnelingArrays.residuals.columns.residual, name: "residual" }]} xLabel="x [input units]" yLabel="y [input units]" />
+              )}
+              {tunnelingArrays.energy_sweep && (
+                <Plot series={[{
+                  x: tunnelingArrays.energy_sweep.columns.energy,
+                  y: tunnelingArrays.energy_sweep.columns.transmission,
+                  name: "transmission",
+                  mode: "lines",
+                }, {
+                  x: tunnelingArrays.energy_sweep.columns.energy,
+                  y: tunnelingArrays.energy_sweep.columns.reflection,
+                  name: "reflection",
+                  mode: "lines",
+                }]} xLabel="particle energy [J]" yLabel="probability" />
               )}
               {notebooks.length > 0 && (
                 <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
